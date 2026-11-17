@@ -4,10 +4,15 @@
   "private": true,
   "description": "GrowthX - Private Capital Execution & Portfolio Terminal",
   "scripts": {
-    "build": "cd client && npm install && npm run build && cd ../server && npm install && npm run build && npx prisma db push && npx ts-node prisma/seed.ts",
+    "build": "npm --prefix client install && npm --prefix client run build && npm --prefix server install && npm --prefix server run build && cd server && npx prisma generate && npx prisma db push --accept-data-loss && node dist/prisma/seed.js",
     "start": "node server/dist/src/index.js"
   },
-  "keywords": ["crypto", "trading", "terminal", "growthx"],
+  "keywords": [
+    "crypto",
+    "trading",
+    "terminal",
+    "growthx"
+  ],
   "author": "GrowthX",
   "license": "ISC"
 }

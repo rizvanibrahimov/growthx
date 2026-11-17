@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import { 
   Wallet, TrendingUp, TrendingDown, ArrowDownRight, ArrowUpRight, 
   Clock, CheckCircle, AlertCircle, RefreshCw, Send,
-  Layers, ArrowUpCircle, History, ChevronRight, Info
+  Layers, ArrowUpCircle, History, ChevronRight
 } from 'lucide-react';
 
 interface NetworkOption {
@@ -14,7 +14,6 @@ interface NetworkOption {
   fee: number;
   placeholder: string;
   inputLabel: string;
-  hint: string;
   badge?: string;
   icon: React.ReactNode;
 }
@@ -36,8 +35,7 @@ export const UserDashboard: React.FC = () => {
       fee: 1.0,
       badge: '$1.00 Fee',
       inputLabel: 'TRC20 Wallet Address',
-      placeholder: 'Starts with T (34 characters)',
-      hint: 'Must start with "T" and be exactly 34 characters',
+      placeholder: 'Enter your USDT TRC20 address',
       icon: (
         <img 
           src="/icons/tron.png?v=2" 
@@ -52,8 +50,7 @@ export const UserDashboard: React.FC = () => {
       sub: 'BNB Network',
       fee: 0,
       inputLabel: 'BEP20 Wallet Address',
-      placeholder: 'Starts with 0x (42 characters)',
-      hint: 'Must start with "0x" and be exactly 42 characters',
+      placeholder: 'Enter your USDT BEP20 address',
       icon: (
         <img 
           src="/icons/bnb.png?v=2" 
@@ -68,8 +65,7 @@ export const UserDashboard: React.FC = () => {
       sub: 'Binance ID Transfer',
       fee: 0,
       inputLabel: 'Binance User ID (UID)',
-      placeholder: 'Enter 8 to 10 digit UID',
-      hint: 'Numbers only (8-10 digits, no letters)',
+      placeholder: 'Enter your Binance Pay UID',
       icon: (
         <img 
           src="/icons/binance.png?v=2" 
@@ -459,18 +455,9 @@ export const UserDashboard: React.FC = () => {
             <form onSubmit={handleWithdraw} className="space-y-4 pt-1">
               {/* 4. WALLET ADDRESS / BINANCE ID INPUT */}
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-semibold text-gray-300">
-                    {selectedNetwork.inputLabel}
-                  </label>
-                  {withdrawAddress.length > 0 && (
-                    <span className="text-[10px] font-mono text-gray-400">
-                      {selectedNetwork.id === 'Binance ID (UID)'
-                        ? `${withdrawAddress.length} digits`
-                        : `${withdrawAddress.length} / ${selectedNetwork.id === 'TRON (TRC20)' ? 34 : 42} chars`}
-                    </span>
-                  )}
-                </div>
+                <label className="text-xs font-semibold text-gray-300 block mb-1">
+                  {selectedNetwork.inputLabel}
+                </label>
                 <input
                   type="text"
                   placeholder={selectedNetwork.placeholder}
@@ -478,10 +465,6 @@ export const UserDashboard: React.FC = () => {
                   onChange={(e) => setWithdrawAddress(e.target.value)}
                   className="w-full bg-[#0a0b0f] border border-[#1e2030] rounded-2xl px-3.5 py-3 text-xs text-white focus:outline-none focus:border-blue-500 font-mono transition"
                 />
-                <p className="text-[10px] text-gray-500 mt-1.5 flex items-center gap-1.5">
-                  <Info className="w-3 h-3 text-gray-400 shrink-0" />
-                  <span>{selectedNetwork.hint}</span>
-                </p>
               </div>
 
               {/* 5. WITHDRAWAL AMOUNT INPUT */}

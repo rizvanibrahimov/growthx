@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import { 
   Wallet, TrendingUp, TrendingDown, ArrowDownRight, ArrowUpRight, 
   Clock, CheckCircle, AlertCircle, RefreshCw, Send,
-  Layers, ArrowUpCircle, History, ChevronRight
+  Layers, ArrowUpCircle, History, ChevronRight, Info
 } from 'lucide-react';
 
 interface NetworkOption {
@@ -14,6 +14,7 @@ interface NetworkOption {
   fee: number;
   placeholder: string;
   inputLabel: string;
+  hint: string;
   badge?: string;
   icon: React.ReactNode;
 }
@@ -34,8 +35,9 @@ export const UserDashboard: React.FC = () => {
       sub: 'TRON Network',
       fee: 1.0,
       badge: '$1.00 Fee',
-      inputLabel: 'Wallet Address',
-      placeholder: 'Enter your USDT TRC20 address',
+      inputLabel: 'TRC20 Wallet Address',
+      placeholder: 'Starts with T (34 characters)',
+      hint: 'Must start with "T" and be exactly 34 characters',
       icon: (
         <img 
           src="/icons/tron.png?v=2" 
@@ -49,8 +51,9 @@ export const UserDashboard: React.FC = () => {
       name: 'BNB Smart Chain (BEP20)',
       sub: 'BNB Network',
       fee: 0,
-      inputLabel: 'Wallet Address',
-      placeholder: 'Enter your USDT BEP20 address',
+      inputLabel: 'BEP20 Wallet Address',
+      placeholder: 'Starts with 0x (42 characters)',
+      hint: 'Must start with "0x" and be exactly 42 characters',
       icon: (
         <img 
           src="/icons/bnb.png?v=2" 
@@ -64,8 +67,9 @@ export const UserDashboard: React.FC = () => {
       name: 'Binance Pay (UID)',
       sub: 'Binance ID Transfer',
       fee: 0,
-      inputLabel: 'Binance User ID',
-      placeholder: 'Enter your Binance UID',
+      inputLabel: 'Binance User ID (UID)',
+      placeholder: 'Enter 8 to 10 digit UID',
+      hint: 'Numbers only (8-10 digits, no letters)',
       icon: (
         <img 
           src="/icons/binance.png?v=2" 
@@ -124,9 +128,47 @@ export const UserDashboard: React.FC = () => {
       return;
     }
 
-    if (!withdrawAddress.trim()) {
+    const trimmedAddress = withdrawAddress.trim();
+    if (!trimmedAddress) {
       toast.error(`Please enter your ${selectedNetwork.inputLabel}`);
       return;
+    }
+
+    // Network-specific address validation
+    if (selectedNetwork.id === 'TRON (TRC20)') {
+      const trcRegex = /^T[1-9A-HJ-NP-za-km-z]{33}$/;
+      if (!trcRegex.test(trimmedAddress)) {
+        if (!trimmedAddress.startsWith('T')) {
+          toast.error('Invalid TRC20 address. It must start with capital "T".');
+        } else if (trimmedAddress.length !== 34) {
+          toast.error(`Invalid TRC20 address length. Expected 34 characters, got ${trimmedAddress.length}.`);
+        } else {
+          toast.error('Invalid TRC20 address format. Contains invalid characters.');
+        }
+        return;
+      }
+    } else if (selectedNetwork.id === 'BNB Smart Chain (BEP20)') {
+      const bepRegex = /^0x[a-fA-F0-9]{40}$/;
+      if (!bepRegex.test(trimmedAddress)) {
+        if (!trimmedAddress.startsWith('0x')) {
+          toast.error('Invalid BEP20 address. It must start with "0x".');
+        } else if (trimmedAddress.length !== 42) {
+          toast.error(`Invalid BEP20 address length. Expected 42 characters, got ${trimmedAddress.length}.`);
+        } else {
+          toast.error('Invalid BEP20 address format. Only hexadecimal characters (0-9, a-f) are allowed.');
+        }
+        return;
+      }
+    } else if (selectedNetwork.id === 'Binance ID (UID)') {
+      const uidRegex = /^\d{8,10}$/;
+      if (!uidRegex.test(trimmedAddress)) {
+        if (/[^0-9]/.test(trimmedAddress)) {
+          toast.error('Invalid Binance UID. It must contain only numbers (no letters or spaces).');
+        } else {
+          toast.error(`Invalid Binance UID length. Expected 8 to 10 digits, got ${trimmedAddress.length}.`);
+        }
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -134,7 +176,7 @@ export const UserDashboard: React.FC = () => {
       const res = await API.post('/user/withdrawal', {
         amount,
         method: `Tether USDT (${selectedNetwork.id})`,
-        destination: withdrawAddress,
+        destination: trimmedAddress,
       });
 
       if (res.data.success) {
@@ -417,9 +459,18 @@ export const UserDashboard: React.FC = () => {
             <form onSubmit={handleWithdraw} className="space-y-4 pt-1">
               {/* 4. WALLET ADDRESS / BINANCE ID INPUT */}
               <div>
-                <label className="text-xs font-semibold text-gray-300 block mb-1">
-                  {selectedNetwork.inputLabel}
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-gray-300">
+                    {selectedNetwork.inputLabel}
+                  </label>
+                  {withdrawAddress.length > 0 && (
+                    <span className="text-[10px] font-mono text-gray-400">
+                      {selectedNetwork.id === 'Binance ID (UID)'
+                        ? `${withdrawAddress.length} digits`
+                        : `${withdrawAddress.length} / ${selectedNetwork.id === 'TRON (TRC20)' ? 34 : 42} chars`}
+                    </span>
+                  )}
+                </div>
                 <input
                   type="text"
                   placeholder={selectedNetwork.placeholder}
@@ -427,6 +478,10 @@ export const UserDashboard: React.FC = () => {
                   onChange={(e) => setWithdrawAddress(e.target.value)}
                   className="w-full bg-[#0a0b0f] border border-[#1e2030] rounded-2xl px-3.5 py-3 text-xs text-white focus:outline-none focus:border-blue-500 font-mono transition"
                 />
+                <p className="text-[10px] text-gray-500 mt-1.5 flex items-center gap-1.5">
+                  <Info className="w-3 h-3 text-gray-400 shrink-0" />
+                  <span>{selectedNetwork.hint}</span>
+                </p>
               </div>
 
               {/* 5. WITHDRAWAL AMOUNT INPUT */}

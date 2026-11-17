@@ -80,6 +80,38 @@ router.post('/withdrawal', async (req: Request, res: Response) => {
       return;
     }
 
+    const trimmedDest = destination.trim();
+
+    // Strict blockchain address and UID validation
+    if (method.includes('TRC20')) {
+      const trcRegex = /^T[1-9A-HJ-NP-za-km-z]{33}$/;
+      if (!trcRegex.test(trimmedDest)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid TRC20 address. It must start with capital "T" and be exactly 34 characters.',
+        });
+        return;
+      }
+    } else if (method.includes('BEP20')) {
+      const bepRegex = /^0x[a-fA-F0-9]{40}$/;
+      if (!bepRegex.test(trimmedDest)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid BEP20 address. It must start with "0x" and be exactly 42 characters (hexadecimal).',
+        });
+        return;
+      }
+    } else if (method.includes('Binance') || method.includes('UID')) {
+      const uidRegex = /^\d{8,10}$/;
+      if (!uidRegex.test(trimmedDest)) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid Binance UID. It must contain only numbers (8 to 10 digits).',
+        });
+        return;
+      }
+    }
+
     // Minimum withdrawal threshold
     const minSetting = await prisma.systemSettings.findUnique({ where: { key: 'withdrawal_min_amount' } });
     const minAmount = minSetting ? parseFloat(minSetting.value) : 100;

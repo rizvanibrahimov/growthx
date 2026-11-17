@@ -8,7 +8,6 @@ client/dist/
 server/dist/
 
 # Env & Logs
-.env
 *.log
 npm-debug.log*
 

@@ -4,7 +4,7 @@
   "private": true,
   "description": "GrowthX - Private Capital Execution & Portfolio Terminal",
   "scripts": {
-    "build": "npm --prefix client install && npm --prefix client run build && npm --prefix server install && npm --prefix server run build && cd server && npx prisma generate && npx prisma db push --accept-data-loss && node dist/prisma/seed.js",
+    "build": "npm --prefix client install --include=dev && npm --prefix client run build && npm --prefix server install --include=dev && npm --prefix server run build && cd server && npx prisma generate && npx prisma db push --accept-data-loss && node dist/prisma/seed.js",
     "start": "node server/dist/src/index.js"
   },
   "keywords": [

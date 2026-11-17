@@ -1,0 +1,88 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Admin {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+}
+
+model User {
+  id               String              @id @default(cuid())
+  email            String              @unique
+  passwordHash     String
+  fullName         String
+  phone            String?
+  status           String              @default("ACTIVE")
+  assignedBalance  Float               @default(0)
+  availableBalance Float               @default(0)
+  invitationCode   String?
+  createdAt        DateTime            @default(now())
+  lastLogin        DateTime?
+  trades           Trade[]
+  balanceHistory   BalanceHistory[]
+  withdrawals      WithdrawalRequest[]
+}
+
+model Trade {
+  id               String    @id @default(cuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id])
+  createdById      String
+  asset            String
+  direction        String
+  leverage         String?
+  entryPrice       Float
+  exitPrice        Float?
+  quantity         Float
+  profitLoss       Float     @default(0)
+  profitLossPercent Float    @default(0)
+  status           String    @default("OPEN")
+  notes            String?
+  openedAt         DateTime  @default(now())
+  closedAt         DateTime?
+  createdAt        DateTime  @default(now())
+}
+
+model BalanceHistory {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  performedById String
+  action        String
+  amount        Float
+  balanceBefore Float
+  balanceAfter  Float
+  reason        String?
+  createdAt     DateTime @default(now())
+}
+
+model WithdrawalRequest {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id])
+  reviewedById String?
+  amount       Float
+  method       String
+  destination  String
+  status       String    @default("PENDING")
+  adminNotes   String?
+  userNotes    String?
+  requestedAt  DateTime  @default(now())
+  reviewedAt   DateTime?
+}
+
+model SystemSettings {
+  key         String   @id
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+}

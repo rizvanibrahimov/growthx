@@ -17,10 +17,10 @@ router.get('/dashboard', async (req: Request, res: Response) => {
     if (!user) { res.status(404).json({ success: false, error: 'User not found' }); return; }
 
     const closedTrades = trades.filter(t => t.status === 'CLOSED');
-    const totalProfit = closedTrades.filter(t => t.profitLoss > 0).reduce((s, t) => s + t.profitLoss, 0);
-    const totalLoss = closedTrades.filter(t => t.profitLoss < 0).reduce((s, t) => s + t.profitLoss, 0);
+    const totalProfit = closedTrades.filter(t => (t.profitLoss || 0) > 0).reduce((s, t) => s + (t.profitLoss || 0), 0);
+    const totalLoss = closedTrades.filter(t => (t.profitLoss || 0) < 0).reduce((s, t) => s + (t.profitLoss || 0), 0);
     const winRate = closedTrades.length > 0
-      ? (closedTrades.filter(t => t.profitLoss > 0).length / closedTrades.length) * 100
+      ? (closedTrades.filter(t => (t.profitLoss || 0) > 0).length / closedTrades.length) * 100
       : 0;
 
     res.json({

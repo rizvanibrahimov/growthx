@@ -43,6 +43,10 @@ if (clientDist) {
   });
 }
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server çalışıyor: http://localhost:${PORT}`);
-});
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`🚀 Server çalışıyor: http://localhost:${PORT}`);
+  });
+}
+
+export default app;

@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Admin {
@@ -24,38 +25,56 @@ model User {
   status           String              @default("ACTIVE")
   assignedBalance  Float               @default(0)
   availableBalance Float               @default(0)
-  invitationCode   String?
-  createdAt        DateTime            @default(now())
+  currency         String              @default("USD")
   lastLogin        DateTime?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
   trades           Trade[]
-  balanceHistory   BalanceHistory[]
   withdrawals      WithdrawalRequest[]
+  balanceHistory   BalanceHistory[]
 }
 
 model Trade {
-  id               String    @id @default(cuid())
-  userId           String
-  user             User      @relation(fields: [userId], references: [id])
-  createdById      String
-  asset            String
-  direction        String
-  leverage         String?
-  entryPrice       Float
-  exitPrice        Float?
-  quantity         Float
-  profitLoss       Float     @default(0)
-  profitLossPercent Float    @default(0)
-  status           String    @default("OPEN")
-  notes            String?
-  openedAt         DateTime  @default(now())
-  closedAt         DateTime?
-  createdAt        DateTime  @default(now())
+  id                String    @id @default(cuid())
+  userId            String
+  asset             String
+  direction         String
+  entryPrice        Float
+  exitPrice         Float?
+  quantity          Float
+  leverage          Int       @default(1)
+  margin            Float?
+  profitLoss        Float?
+  profitLossPercent Float?
+  status            String    @default("OPEN")
+  notes             String?
+  createdById       String?
+  openedAt          DateTime  @default(now())
+  executedAt        DateTime  @default(now())
+  closedAt          DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model WithdrawalRequest {
+  id           String    @id @default(cuid())
+  userId       String
+  amount       Float
+  method       String
+  destination  String
+  status       String    @default("PENDING")
+  userNotes    String?
+  adminNotes   String?
+  requestedAt  DateTime  @default(now())
+  reviewedAt   DateTime?
+  reviewedById String?
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model BalanceHistory {
   id            String   @id @default(cuid())
   userId        String
-  user          User     @relation(fields: [userId], references: [id])
   performedById String
   action        String
   amount        Float
@@ -63,25 +82,12 @@ model BalanceHistory {
   balanceAfter  Float
   reason        String?
   createdAt     DateTime @default(now())
-}
-
-model WithdrawalRequest {
-  id           String    @id @default(cuid())
-  userId       String
-  user         User      @relation(fields: [userId], references: [id])
-  reviewedById String?
-  amount       Float
-  method       String
-  destination  String
-  status       String    @default("PENDING")
-  adminNotes   String?
-  userNotes    String?
-  requestedAt  DateTime  @default(now())
-  reviewedAt   DateTime?
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model SystemSettings {
-  key         String   @id
+  id          String   @id @default(cuid())
+  key         String   @unique
   value       String
   description String?
   updatedAt   DateTime @updatedAt

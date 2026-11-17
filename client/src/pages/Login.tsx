@@ -41,17 +41,17 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0a0b0f] p-4">
-      <div className="w-full max-w-md bg-[#12131a] border border-[#1e2030] rounded-3xl p-8 shadow-2xl">
-        <div className="flex flex-col items-center mb-8">
-          <GrowthXLogo size="lg" showText={false} className="mb-3" />
-          <h1 className="text-2xl font-black text-white tracking-tight flex items-center">
+    <div className="h-[100dvh] min-h-[100dvh] w-full flex items-center justify-center bg-[#0a0b0f] p-4 overflow-hidden fixed inset-0">
+      <div className="w-full max-w-sm sm:max-w-md bg-[#12131a] border border-[#1e2030] rounded-3xl p-6 sm:p-8 shadow-2xl">
+        <div className="flex flex-col items-center mb-6 sm:mb-8">
+          <GrowthXLogo size="lg" showText={false} className="mb-2 sm:mb-3" />
+          <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center">
             <span>Growth</span>
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 ml-0.5">
               X
             </span>
           </h1>
-          <p className="text-xs text-gray-400 mt-1">Private Execution & Capital Growth Terminal</p>
+          <p className="text-[11px] sm:text-xs text-gray-400 mt-1">Private Execution & Capital Growth Terminal</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">

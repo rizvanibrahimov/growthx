@@ -96,10 +96,6 @@ export const Login: React.FC = () => {
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>
-
-        <div className="mt-8 pt-6 border-t border-[#1e2030] text-center text-xs text-gray-500 space-y-1">
-          <p>Administrator: <span className="text-gray-300 font-mono">admin@growthx.com</span> / <span className="text-gray-300 font-mono">admin123</span></p>
-        </div>
       </div>
     </div>
   );

@@ -105,6 +105,14 @@ export const UserDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchData();
+
+    // Send heartbeat immediately and every 30 seconds while user is active
+    const sendHeartbeat = () => {
+      API.post('/user/heartbeat').catch(() => {});
+    };
+    sendHeartbeat();
+    const heartbeatInterval = setInterval(sendHeartbeat, 30000);
+    return () => clearInterval(heartbeatInterval);
   }, []);
 
   const parsedAmount = parseFloat(withdrawAmount) || 0;

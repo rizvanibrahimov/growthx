@@ -4,6 +4,19 @@ import { PrismaClient } from '@prisma/client';
 const router = Router();
 const prisma = new PrismaClient();
 
+// POST /api/user/heartbeat — Update last activity timestamp (online detection)
+router.post('/heartbeat', async (req: Request, res: Response) => {
+  try {
+    await prisma.user.update({
+      where: { id: req.user!.id },
+      data: { lastActivity: new Date() },
+    });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false });
+  }
+});
+
 // GET /api/user/dashboard — User's dashboard summary
 router.get('/dashboard', async (req: Request, res: Response) => {
   try {

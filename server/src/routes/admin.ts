@@ -13,7 +13,7 @@ router.get('/users', async (_req: Request, res: Response) => {
       select: {
         id: true, email: true, fullName: true, phone: true,
         status: true, assignedBalance: true, availableBalance: true,
-        createdAt: true, lastLogin: true,
+        createdAt: true, lastLogin: true, lastActivity: true,
         _count: { select: { trades: true, withdrawals: true } }
       },
     });
@@ -78,6 +78,31 @@ router.put('/users/:id', async (req: Request, res: Response) => {
     res.json({ success: true, data: user });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to update user' });
+  }
+});
+
+// DELETE /api/admin/users/:id — Permanently delete user and all related data
+router.delete('/users/:id', async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      res.status(404).json({ success: false, error: 'User not found' });
+      return;
+    }
+
+    // Cascade delete: trades, withdrawals, balance history, then user
+    await prisma.$transaction(async (tx) => {
+      await tx.trade.deleteMany({ where: { userId: id } });
+      await tx.withdrawalRequest.deleteMany({ where: { userId: id } });
+      await tx.balanceHistory.deleteMany({ where: { userId: id } });
+      await tx.user.delete({ where: { id } });
+    });
+
+    res.json({ success: true, message: `User "${user.fullName}" and all related data permanently deleted` });
+  } catch (error) {
+    console.error('Delete user error:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete user' });
   }
 });
 

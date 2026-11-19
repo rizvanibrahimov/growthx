@@ -47,7 +47,7 @@ router.post('/login', async (req: Request, res: Response) => {
       return;
     }
 
-    await prisma.user.update({ where: { id: user.id }, data: { lastLogin: new Date() } });
+    await prisma.user.update({ where: { id: user.id }, data: { lastLogin: new Date(), lastActivity: new Date() } });
 
     const token = jwt.sign({ id: user.id, email: user.email, role: 'user' }, JWT_SECRET, { expiresIn: '24h' });
     res.json({ success: true, data: { token, role: 'user', name: user.fullName } });

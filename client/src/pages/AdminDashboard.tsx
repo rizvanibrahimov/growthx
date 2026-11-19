@@ -3,7 +3,8 @@ import API from '../services/api';
 import toast from 'react-hot-toast';
 import { 
   Users, UserPlus, DollarSign, CheckCircle, 
-  XCircle, Clock, TrendingUp, RefreshCw, ChevronRight, Activity, ArrowUpRight, ArrowDownRight
+  XCircle, Clock, TrendingUp, RefreshCw, ChevronRight, Activity, ArrowUpRight, ArrowDownRight,
+  Trash2, AlertTriangle
 } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
@@ -16,6 +17,8 @@ export const AdminDashboard: React.FC = () => {
   const [showAddUser, setShowAddUser] = useState(false);
   const [showAddBalance, setShowAddBalance] = useState(false);
   const [showAddTrade, setShowAddTrade] = useState(false);
+  const [showDeleteUser, setShowDeleteUser] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Form states
   const [newUser, setNewUser] = useState({ fullName: '', email: '', password: '', phone: '' });
@@ -52,7 +55,63 @@ export const AdminDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-  }, []);
+    // Auto-refresh investor presence and updates every 15 seconds
+    const interval = setInterval(fetchData, 15000);
+    return () => clearInterval(interval);
+  }, [selectedUser?.id]);
+
+  // Online check: active within last 2 minutes (120,000 ms)
+  const isUserOnline = (user: any) => {
+    if (!user || !user.lastActivity) return false;
+    const diff = Date.now() - new Date(user.lastActivity).getTime();
+    return diff < 120000;
+  };
+
+  const formatLastSeen = (user: any) => {
+    if (!user.lastLogin && !user.lastActivity) return 'Never';
+    const target = user.lastActivity || user.lastLogin;
+    const diffSec = Math.floor((Date.now() - new Date(target).getTime()) / 1000);
+    if (diffSec < 60) return 'Just now';
+    if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+    if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
+    return new Date(target).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+  };
+
+  const formatFullDate = (dateStr?: string | null) => {
+    if (!dateStr) return 'Never logged in';
+    return new Date(dateStr).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+  };
+
+  const handleDeleteUser = async () => {
+    if (!selectedUser) return;
+    setDeleting(true);
+    try {
+      const res = await API.delete(`/admin/users/${selectedUser.id}`);
+      if (res.data.success) {
+        toast.success(`Investor account "${selectedUser.fullName}" deleted`);
+        setShowDeleteUser(false);
+        setSelectedUser(null);
+        fetchData();
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to delete user');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -260,6 +319,7 @@ export const AdminDashboard: React.FC = () => {
             ) : (
               users.map((u) => {
                 const isSelected = selectedUser?.id === u.id;
+                const online = isUserOnline(u);
                 return (
                   <div
                     key={u.id}
@@ -272,16 +332,42 @@ export const AdminDashboard: React.FC = () => {
                   >
                     <div>
                       <div className="flex items-center gap-2">
+                        {/* Status Pulse Indicator */}
+                        <span className="relative flex h-2.5 w-2.5">
+                          {online ? (
+                            <>
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                            </>
+                          ) : (
+                            <span className="inline-flex rounded-full h-2.5 w-2.5 bg-gray-600"></span>
+                          )}
+                        </span>
+
                         <span className="font-bold text-white text-sm">{u.fullName}</span>
                         <span className="text-xs text-gray-400">({u.email})</span>
+
+                        {online ? (
+                          <span className="text-[9px] font-bold uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded">
+                            ONLINE
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-gray-500 font-mono">
+                            {formatLastSeen(u)}
+                          </span>
+                        )}
+
                         {isSelected && (
                           <span className="text-[9px] font-bold uppercase bg-blue-500 text-white px-1.5 py-0.2 rounded">
                             SELECTED
                           </span>
                         )}
                       </div>
-                      <div className="text-[11px] text-gray-400 mt-1">
-                        Registered: {new Date(u.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} • Trades: {u._count?.trades || 0}
+
+                      <div className="text-[11px] text-gray-400 mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono">
+                        <span>Last Login: <b className="text-gray-300 font-normal">{formatFullDate(u.lastLogin)}</b></span>
+                        <span className="text-gray-600">•</span>
+                        <span>Trades: {u._count?.trades || 0}</span>
                       </div>
                     </div>
 
@@ -304,22 +390,51 @@ export const AdminDashboard: React.FC = () => {
         {/* Selected Investor Action Panel (Right 1 col) */}
         <div>
           {selectedUser ? (
-            <div className="bg-[#12131a] border border-[#1e2030] rounded-2xl p-5 space-y-5">
+            <div className="bg-[#12131a] border border-[#1e2030] rounded-2xl p-5 space-y-4">
               <div>
-                <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Active Account</span>
-                <h3 className="text-lg font-bold text-white mt-0.5">{selectedUser.fullName}</h3>
-                <div className="text-xs text-gray-400">{selectedUser.email}</div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Active Account</span>
+                  {isUserOnline(selectedUser) ? (
+                    <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                      ONLINE NOW
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-gray-400 bg-gray-800/60 px-2 py-0.5 rounded-full border border-gray-700/50 font-mono">
+                      Last seen {formatLastSeen(selectedUser)}
+                    </span>
+                  )}
+                </div>
+
+                <h3 className="text-lg font-bold text-white">{selectedUser.fullName}</h3>
+                <div className="text-xs text-gray-400 font-mono">{selectedUser.email}</div>
+                {selectedUser.phone && (
+                  <div className="text-[11px] text-gray-500 font-mono mt-0.5">Phone: {selectedUser.phone}</div>
+                )}
                 
+                {/* Client Visible Balance */}
                 <div className="mt-3 bg-[#0a0b0f] p-3.5 rounded-xl border border-[#1e2030]">
                   <div className="text-[10px] text-gray-500 uppercase font-semibold">Client's Visible Balance</div>
                   <div className="text-2xl font-extrabold text-emerald-400 font-mono mt-0.5">
                     ${selectedUser.availableBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </div>
                 </div>
+
+                {/* Login & Activity Metadata */}
+                <div className="mt-2.5 bg-[#0a0b0f] p-3 rounded-xl border border-[#1e2030] space-y-1.5 text-[11px]">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Last Login:</span>
+                    <span className="text-gray-200 font-mono font-medium">{formatFullDate(selectedUser.lastLogin)}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-[#1e2030] pt-1.5">
+                    <span className="text-gray-400">Registered:</span>
+                    <span className="text-gray-400 font-mono">{formatFullDate(selectedUser.createdAt)}</span>
+                  </div>
+                </div>
               </div>
 
               {/* ACTION BUTTONS */}
-              <div className="space-y-2.5">
+              <div className="space-y-2 pt-1">
                 <button
                   onClick={() => setShowAddTrade(true)}
                   className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 text-xs"
@@ -334,6 +449,15 @@ export const AdminDashboard: React.FC = () => {
                 >
                   <DollarSign className="w-4 h-4 text-emerald-400" />
                   <span>Deposit / Withdraw Balance</span>
+                </button>
+
+                {/* DELETE ACCOUNT BUTTON */}
+                <button
+                  onClick={() => setShowDeleteUser(true)}
+                  className="w-full bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-semibold py-2.5 rounded-xl transition flex items-center justify-center gap-2 text-xs mt-3"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Delete Investor Account</span>
                 </button>
               </div>
 
@@ -628,6 +752,62 @@ export const AdminDashboard: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: DELETE INVESTOR CONFIRMATION */}
+      {showDeleteUser && selectedUser && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-[#12131a] border border-rose-500/30 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center gap-3 text-rose-400">
+              <div className="p-2.5 bg-rose-500/10 rounded-xl border border-rose-500/20">
+                <AlertTriangle className="w-6 h-6 text-rose-500" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Delete Investor Account?</h3>
+                <p className="text-xs text-rose-400/90">This action is permanent and irreversible.</p>
+              </div>
+            </div>
+
+            <div className="bg-[#0a0b0f] p-3.5 rounded-xl border border-[#1e2030] text-xs space-y-1.5">
+              <div className="flex justify-between">
+                <span className="text-gray-400">Investor:</span>
+                <span className="font-bold text-white">{selectedUser.fullName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Email:</span>
+                <span className="font-mono text-gray-300">{selectedUser.email}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Available Balance:</span>
+                <span className="font-mono text-emerald-400 font-bold">${selectedUser.availableBalance.toFixed(2)}</span>
+              </div>
+            </div>
+
+            <p className="text-xs text-gray-400 leading-relaxed">
+              Deleting this account will permanently remove this user along with all associated trade records, deposit/withdrawal requests, and balance history logs from the database.
+            </p>
+
+            <div className="flex justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => setShowDeleteUser(false)}
+                className="px-4 py-2.5 rounded-xl text-xs text-gray-400 hover:text-white bg-[#1e2030] transition disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={handleDeleteUser}
+                className="bg-rose-600 hover:bg-rose-500 active:scale-95 text-white text-xs font-semibold px-5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-lg shadow-rose-600/30 disabled:opacity-50"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{deleting ? 'Deleting...' : 'Yes, Delete Account'}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

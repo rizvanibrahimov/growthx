@@ -163,32 +163,117 @@ router.post('/users/:id/balance', async (req: Request, res: Response) => {
 // POST /api/admin/trades — Record trade
 router.post('/trades', async (req: Request, res: Response) => {
   try {
-    const { userId, asset, direction, leverage, entryPrice, quantity, notes } = req.body;
+    const { userId, asset, direction, leverage, margin, entryPrice, exitPrice, quantity, profitLoss, profitLossPercent, status, notes } = req.body;
 
-    if (!userId || !asset || !direction || !entryPrice || !quantity) {
-      res.status(400).json({ success: false, error: 'Required trade parameters are missing' });
+    if (!userId || !asset || !direction || entryPrice === undefined || entryPrice === null) {
+      res.status(400).json({ success: false, error: 'Required trade parameters are missing (userId, asset, direction, entryPrice)' });
       return;
     }
 
-    // Parse leverage: strip non-numeric chars (e.g. "20x" -> 20), default to 1
-    const parsedLeverage = typeof leverage === 'string' ? parseInt(leverage.replace(/[^0-9]/g, ''), 10) : (typeof leverage === 'number' ? leverage : 1);
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      res.status(404).json({ success: false, error: 'User not found' });
+      return;
+    }
 
-    const trade = await prisma.trade.create({
-      data: {
-        userId,
-        createdById: req.user!.id,
-        asset,
-        direction,
-        leverage: isNaN(parsedLeverage) ? 1 : parsedLeverage,
-        entryPrice: typeof entryPrice === 'string' ? parseFloat(entryPrice) : entryPrice,
-        quantity: typeof quantity === 'string' ? parseFloat(quantity) : quantity,
-        notes: notes || null,
-        status: 'OPEN',
-        openedAt: new Date(),
-      },
+    // Parse leverage
+    const parsedLeverage = typeof leverage === 'string' ? parseInt(leverage.replace(/[^0-9]/g, ''), 10) : (typeof leverage === 'number' ? leverage : 1);
+    const lev = isNaN(parsedLeverage) || parsedLeverage < 1 ? 1 : parsedLeverage;
+
+    const parsedEntry = typeof entryPrice === 'string' ? parseFloat(entryPrice) : entryPrice;
+    const parsedExit = exitPrice !== undefined && exitPrice !== null && exitPrice !== '' ? (typeof exitPrice === 'string' ? parseFloat(exitPrice) : exitPrice) : null;
+    const parsedMargin = margin !== undefined && margin !== null && margin !== '' ? (typeof margin === 'string' ? parseFloat(margin) : margin) : null;
+
+    // Calculate quantity
+    let parsedQty: number;
+    if (quantity !== undefined && quantity !== null && !isNaN(parseFloat(quantity))) {
+      parsedQty = parseFloat(quantity);
+    } else if (parsedMargin && parsedEntry > 0) {
+      parsedQty = (parsedMargin * lev) / parsedEntry;
+    } else {
+      parsedQty = 1;
+    }
+
+    const tradeStatus = status || (parsedExit !== null || profitLoss !== undefined ? 'CLOSED' : 'OPEN');
+
+    // Calculate PnL if CLOSED
+    let finalPnL: number | null = null;
+    let finalPnLPct: number | null = null;
+
+    if (tradeStatus === 'CLOSED') {
+      if (profitLoss !== undefined && profitLoss !== null && profitLoss !== '' && !isNaN(parseFloat(profitLoss))) {
+        finalPnL = parseFloat(profitLoss);
+      } else if (parsedExit !== null && parsedEntry > 0) {
+        const dir = direction === 'BUY' ? 1 : -1;
+        const pricePct = ((parsedExit - parsedEntry) / parsedEntry) * dir;
+        if (parsedMargin) {
+          finalPnL = parsedMargin * lev * pricePct;
+        } else {
+          finalPnL = (parsedExit - parsedEntry) * parsedQty * dir;
+        }
+      } else {
+        finalPnL = 0;
+      }
+
+      if (profitLossPercent !== undefined && profitLossPercent !== null && !isNaN(parseFloat(profitLossPercent))) {
+        finalPnLPct = parseFloat(profitLossPercent);
+      } else if (parsedExit !== null && parsedEntry > 0) {
+        const dir = direction === 'BUY' ? 1 : -1;
+        finalPnLPct = (((parsedExit - parsedEntry) / parsedEntry) * dir) * lev * 100;
+      } else if (parsedMargin && parsedMargin > 0 && finalPnL !== null) {
+        finalPnLPct = (finalPnL / parsedMargin) * 100;
+      }
+    }
+
+    // Execute transaction: create trade and update user balance if closed
+    const result = await prisma.$transaction(async (tx) => {
+      const trade = await tx.trade.create({
+        data: {
+          userId,
+          createdById: req.user!.id,
+          asset,
+          direction,
+          leverage: lev,
+          margin: parsedMargin,
+          entryPrice: parsedEntry,
+          exitPrice: parsedExit,
+          quantity: parsedQty,
+          profitLoss: finalPnL,
+          profitLossPercent: finalPnLPct,
+          status: tradeStatus,
+          notes: notes || null,
+          openedAt: new Date(),
+          closedAt: tradeStatus === 'CLOSED' ? new Date() : null,
+        },
+      });
+
+      if (tradeStatus === 'CLOSED' && finalPnL !== null) {
+        const balanceBefore = user.availableBalance;
+        const balanceAfter = balanceBefore + finalPnL;
+        const balanceAction = finalPnL >= 0 ? 'TRADE_PROFIT' : 'TRADE_LOSS';
+
+        await tx.user.update({
+          where: { id: userId },
+          data: { availableBalance: balanceAfter },
+        });
+
+        await tx.balanceHistory.create({
+          data: {
+            userId,
+            performedById: req.user!.id,
+            action: balanceAction,
+            amount: Math.abs(finalPnL),
+            balanceBefore,
+            balanceAfter,
+            reason: `${asset} ${direction} ${lev}x | Entry: $${parsedEntry} → Exit: $${parsedExit !== null ? parsedExit : 'Closed'} | PnL: ${finalPnL >= 0 ? '+' : ''}$${finalPnL.toFixed(2)}`,
+          },
+        });
+      }
+
+      return trade;
     });
 
-    res.json({ success: true, data: trade });
+    res.json({ success: true, data: result });
   } catch (error) {
     console.error('Trade error:', error);
     res.status(500).json({ success: false, error: 'Failed to record trade' });
@@ -199,14 +284,30 @@ router.post('/trades', async (req: Request, res: Response) => {
 router.put('/trades/:id', async (req: Request, res: Response) => {
   try {
     const id = req.params.id as string;
-    const { exitPrice, status, notes } = req.body;
+    const { exitPrice, status, notes, profitLoss: customPnL, profitLossPercent: customPnLPct } = req.body;
 
     const trade = await prisma.trade.findUnique({ where: { id } });
     if (!trade) { res.status(404).json({ success: false, error: 'Trade not found' }); return; }
 
-    if (status === 'CLOSED' && exitPrice !== undefined) {
-      const profitLoss = (exitPrice - trade.entryPrice) * trade.quantity * (trade.direction === 'BUY' ? 1 : -1);
-      const profitLossPercent = ((exitPrice - trade.entryPrice) / trade.entryPrice) * 100 * (trade.direction === 'BUY' ? 1 : -1);
+    if (status === 'CLOSED' && (exitPrice !== undefined || customPnL !== undefined)) {
+      const exit = exitPrice !== undefined && exitPrice !== null ? (typeof exitPrice === 'string' ? parseFloat(exitPrice) : exitPrice) : trade.entryPrice;
+      const lev = trade.leverage || 1;
+      const dir = trade.direction === 'BUY' ? 1 : -1;
+
+      let profitLoss: number;
+      let profitLossPercent: number | null = null;
+
+      if (customPnL !== undefined && customPnL !== null && !isNaN(parseFloat(customPnL))) {
+        profitLoss = parseFloat(customPnL);
+        profitLossPercent = customPnLPct !== undefined ? parseFloat(customPnLPct) : (trade.margin ? (profitLoss / trade.margin) * 100 : null);
+      } else if (trade.margin && trade.entryPrice > 0) {
+        const priceChangePct = ((exit - trade.entryPrice) / trade.entryPrice) * dir;
+        profitLoss = trade.margin * lev * priceChangePct;
+        profitLossPercent = priceChangePct * lev * 100;
+      } else {
+        profitLoss = (exit - trade.entryPrice) * trade.quantity * dir;
+        profitLossPercent = ((exit - trade.entryPrice) / trade.entryPrice) * 100 * dir;
+      }
 
       const user = await prisma.user.findUnique({ where: { id: trade.userId } });
       if (!user) { res.status(404).json({ success: false, error: 'User not found' }); return; }
@@ -218,7 +319,7 @@ router.put('/trades/:id', async (req: Request, res: Response) => {
       const result = await prisma.$transaction(async (tx) => {
         const updatedTrade = await tx.trade.update({
           where: { id },
-          data: { exitPrice, status: 'CLOSED', closedAt: new Date(), profitLoss, profitLossPercent, notes: notes || trade.notes },
+          data: { exitPrice: exit, status: 'CLOSED', closedAt: new Date(), profitLoss, profitLossPercent, notes: notes || trade.notes },
         });
         await tx.user.update({
           where: { id: trade.userId },
@@ -232,7 +333,7 @@ router.put('/trades/:id', async (req: Request, res: Response) => {
             amount: Math.abs(profitLoss),
             balanceBefore,
             balanceAfter,
-            reason: `${trade.asset} ${trade.direction} | Entry: $${trade.entryPrice} → Exit: $${exitPrice}`,
+            reason: `${trade.asset} ${trade.direction} ${lev}x | Entry: $${trade.entryPrice} → Exit: $${exit} | PnL: ${profitLoss >= 0 ? '+' : ''}$${profitLoss.toFixed(2)}`,
           },
         });
         return updatedTrade;
@@ -253,6 +354,7 @@ router.put('/trades/:id', async (req: Request, res: Response) => {
     console.error('Trade update error:', error);
     res.status(500).json({ success: false, error: 'Failed to update trade' });
   }
+});
 });
 
 // GET /api/admin/trades — All trades

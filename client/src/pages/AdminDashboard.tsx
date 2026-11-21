@@ -27,9 +27,9 @@ export const AdminDashboard: React.FC = () => {
     asset: 'BTC/USDT',
     direction: 'BUY',
     leverage: '20x',
+    margin: '',
     entryPrice: '',
     exitPrice: '',
-    quantity: '1',
     profitLoss: '',
     notes: 'Telegram trade signal'
   });
@@ -158,56 +158,96 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
+  const updateTradeFormField = (field: string, value: any) => {
+    const updated: any = { ...tradeForm, [field]: value };
+
+    // Auto-calculate PnL when margin, entry, exit, leverage, or direction changes
+    const entry = parseFloat(field === 'entryPrice' ? value : updated.entryPrice);
+    const exit = parseFloat(field === 'exitPrice' ? value : updated.exitPrice);
+    const margin = parseFloat(field === 'margin' ? value : updated.margin);
+    const lev = parseInt(String(field === 'leverage' ? value : updated.leverage).replace(/[^0-9]/g, ''), 10) || 1;
+    const dir = (field === 'direction' ? value : updated.direction) === 'BUY' ? 1 : -1;
+
+    if (!isNaN(entry) && entry > 0 && !isNaN(exit) && exit > 0) {
+      const pricePct = ((exit - entry) / entry) * dir;
+      if (!isNaN(margin) && margin > 0) {
+        const calculatedPnL = margin * lev * pricePct;
+        updated.profitLoss = (calculatedPnL >= 0 ? '+' : '') + calculatedPnL.toFixed(2);
+      } else {
+        const calculatedPnL = (exit - entry) * dir;
+        updated.profitLoss = (calculatedPnL >= 0 ? '+' : '') + calculatedPnL.toFixed(2);
+      }
+    }
+
+    setTradeForm(updated);
+  };
+
   const handleRecordTrade = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUser) return;
 
     const entry = parseFloat(tradeForm.entryPrice);
-    const exit = parseFloat(tradeForm.exitPrice);
-    const qty = parseFloat(tradeForm.quantity);
+    const exit = tradeForm.exitPrice ? parseFloat(tradeForm.exitPrice) : null;
+    const margin = tradeForm.margin ? parseFloat(tradeForm.margin) : null;
     let pnl = parseFloat(tradeForm.profitLoss);
 
-    if (isNaN(entry) || isNaN(qty)) {
-      toast.error('Please enter entry price and quantity');
+    if (isNaN(entry)) {
+      toast.error('Please enter a valid entry price');
       return;
     }
 
-    if (isNaN(pnl) && !isNaN(exit)) {
-      pnl = (exit - entry) * qty * (tradeForm.direction === 'BUY' ? 1 : -1);
+    const lev = parseInt(tradeForm.leverage.replace(/[^0-9]/g, ''), 10) || 1;
+    const dir = tradeForm.direction === 'BUY' ? 1 : -1;
+
+    // Fallback calculate PnL if not explicitly filled
+    if (isNaN(pnl) && exit !== null && !isNaN(exit)) {
+      const pricePct = ((exit - entry) / entry) * dir;
+      if (margin && !isNaN(margin)) {
+        pnl = margin * lev * pricePct;
+      } else {
+        pnl = (exit - entry) * dir;
+      }
     }
+
+    if (isNaN(pnl)) {
+      toast.error('Please enter settled PnL amount or exit price');
+      return;
+    }
+
+    const qty = margin && entry > 0 ? (margin * lev) / entry : 1;
+    const pnlPct = margin && margin > 0 ? (pnl / margin) * 100 : (exit ? (((exit - entry) / entry) * dir * lev * 100) : 0);
 
     try {
       const tradeRes = await API.post('/admin/trades', {
         userId: selectedUser.id,
         asset: tradeForm.asset,
         direction: tradeForm.direction,
-        leverage: parseInt(tradeForm.leverage.replace(/[^0-9]/g, ''), 10) || 1,
+        leverage: lev,
+        margin: margin,
         entryPrice: entry,
+        exitPrice: exit !== null ? exit : entry,
         quantity: qty,
+        profitLoss: pnl,
+        profitLossPercent: pnlPct,
+        status: 'CLOSED',
         notes: tradeForm.notes,
       });
 
-      if (tradeRes.data.success && !isNaN(pnl)) {
-        await API.put(`/admin/trades/${tradeRes.data.data.id}`, {
-          status: 'CLOSED',
-          exitPrice: !isNaN(exit) ? exit : entry,
-          notes: tradeForm.notes,
+      if (tradeRes.data.success) {
+        toast.success(`Trade settlement recorded! Balance updated (${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)})`);
+        setShowAddTrade(false);
+        setTradeForm({
+          asset: 'BTC/USDT',
+          direction: 'BUY',
+          leverage: '20x',
+          margin: '',
+          entryPrice: '',
+          exitPrice: '',
+          profitLoss: '',
+          notes: 'Telegram trade signal'
         });
+        fetchData();
       }
-
-      toast.success('Trade settlement recorded and balance updated!');
-      setShowAddTrade(false);
-      setTradeForm({
-        asset: 'BTC/USDT',
-        direction: 'BUY',
-        leverage: '20x',
-        entryPrice: '',
-        exitPrice: '',
-        quantity: '1',
-        profitLoss: '',
-        notes: 'Telegram trade signal'
-      });
-      fetchData();
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'Failed to record trade');
     }
@@ -638,7 +678,7 @@ export const AdminDashboard: React.FC = () => {
                     required
                     placeholder="BTC/USDT"
                     value={tradeForm.asset}
-                    onChange={(e) => setTradeForm({ ...tradeForm, asset: e.target.value.toUpperCase() })}
+                    onChange={(e) => updateTradeFormField('asset', e.target.value.toUpperCase())}
                     className="w-full bg-[#0a0b0f] border border-[#1e2030] rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-blue-500 font-bold"
                   />
                 </div>
@@ -648,7 +688,7 @@ export const AdminDashboard: React.FC = () => {
                     type="text"
                     placeholder="20x"
                     value={tradeForm.leverage}
-                    onChange={(e) => setTradeForm({ ...tradeForm, leverage: e.target.value })}
+                    onChange={(e) => updateTradeFormField('leverage', e.target.value)}
                     className="w-full bg-[#0a0b0f] border border-[#1e2030] rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-blue-500"
                   />
                 </div>
@@ -660,7 +700,7 @@ export const AdminDashboard: React.FC = () => {
                 <div className="grid grid-cols-2 gap-2 p-1 bg-[#0a0b0f] border border-[#1e2030] rounded-xl">
                   <button
                     type="button"
-                    onClick={() => setTradeForm({ ...tradeForm, direction: 'BUY' })}
+                    onClick={() => updateTradeFormField('direction', 'BUY')}
                     className={`py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition ${
                       tradeForm.direction === 'BUY' 
                         ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30' 
@@ -671,7 +711,7 @@ export const AdminDashboard: React.FC = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setTradeForm({ ...tradeForm, direction: 'SELL' })}
+                    onClick={() => updateTradeFormField('direction', 'SELL')}
                     className={`py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition ${
                       tradeForm.direction === 'SELL' 
                         ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30' 
@@ -683,7 +723,20 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </div>
 
+              {/* MARGIN & ENTRY PRICE */}
               <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">Margin ($)</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="e.g. 100 or 500"
+                    value={tradeForm.margin}
+                    onChange={(e) => updateTradeFormField('margin', e.target.value.replace(/[^0-9.]/g, ''))}
+                    className="w-full bg-[#0a0b0f] border border-[#1e2030] rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-blue-500 font-mono"
+                  />
+                  <span className="text-[10px] text-gray-500 mt-0.5 block">Position investment</span>
+                </div>
                 <div>
                   <label className="text-xs text-gray-400 block mb-1">Entry Price ($)</label>
                   <input
@@ -692,10 +745,15 @@ export const AdminDashboard: React.FC = () => {
                     required
                     placeholder="e.g. 95000"
                     value={tradeForm.entryPrice}
-                    onChange={(e) => setTradeForm({ ...tradeForm, entryPrice: e.target.value.replace(/[^0-9.]/g, '') })}
+                    onChange={(e) => updateTradeFormField('entryPrice', e.target.value.replace(/[^0-9.]/g, ''))}
                     className="w-full bg-[#0a0b0f] border border-[#1e2030] rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-blue-500 font-mono"
                   />
+                  <span className="text-[10px] text-gray-500 mt-0.5 block">Entry coin price</span>
                 </div>
+              </div>
+
+              {/* EXIT PRICE & NET PNL */}
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-gray-400 block mb-1">Exit Price ($)</label>
                   <input
@@ -703,26 +761,24 @@ export const AdminDashboard: React.FC = () => {
                     inputMode="decimal"
                     placeholder="e.g. 98200"
                     value={tradeForm.exitPrice}
-                    onChange={(e) => setTradeForm({ ...tradeForm, exitPrice: e.target.value.replace(/[^0-9.]/g, '') })}
+                    onChange={(e) => updateTradeFormField('exitPrice', e.target.value.replace(/[^0-9.]/g, ''))}
                     className="w-full bg-[#0a0b0f] border border-[#1e2030] rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-blue-500 font-mono"
                   />
+                  <span className="text-[10px] text-gray-500 mt-0.5 block">Closing price</span>
                 </div>
-              </div>
-
-              <div>
-                <label className="text-xs text-gray-400 block mb-1">Net Settled PnL Amount ($)</label>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  required
-                  placeholder="e.g. +350 or -120"
-                  value={tradeForm.profitLoss}
-                  onChange={(e) => setTradeForm({ ...tradeForm, profitLoss: e.target.value.replace(/[^0-9.-]/g, '') })}
-                  className="w-full bg-[#0a0b0f] border border-[#1e2030] rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-blue-500 font-mono font-bold"
-                />
-                <span className="text-[10px] text-gray-500 mt-0.5 block">
-                  Positive value (+) adds profit to balance, negative value (-) subtracts loss.
-                </span>
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">Net Settled PnL ($)</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    required
+                    placeholder="e.g. +67.50 or -30.00"
+                    value={tradeForm.profitLoss}
+                    onChange={(e) => setTradeForm({ ...tradeForm, profitLoss: e.target.value.replace(/[^0-9.-]/g, '') })}
+                    className="w-full bg-[#0a0b0f] border border-[#1e2030] rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-blue-500 font-mono font-bold"
+                  />
+                  <span className="text-[10px] text-gray-500 mt-0.5 block">Auto or manual PnL</span>
+                </div>
               </div>
 
               <div>

@@ -735,7 +735,7 @@ export const UserDashboard: React.FC = () => {
             <span className="font-bold text-white text-sm tracking-wide">{trade.asset}</span>
             {trade.leverage && (
               <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 border border-amber-400/20 px-1.5 py-0.5 rounded">
-                {trade.leverage}
+                {typeof trade.leverage === 'number' ? `${trade.leverage}x` : trade.leverage}
               </span>
             )}
             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 ${
@@ -748,9 +748,16 @@ export const UserDashboard: React.FC = () => {
 
           <div>
             {trade.status === 'CLOSED' ? (
-              <span className={`font-mono font-bold text-sm ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
-                {isProfit ? '+' : ''}${trade.profitLoss.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
+              <div className="text-right">
+                <span className={`font-mono font-bold text-sm block ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {isProfit ? '+' : ''}${trade.profitLoss?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+                {trade.profitLossPercent !== null && trade.profitLossPercent !== undefined && (
+                  <span className={`text-[10px] font-mono block font-semibold ${isProfit ? 'text-emerald-400/80' : 'text-rose-400/80'}`}>
+                    {isProfit ? '+' : ''}{Number(trade.profitLossPercent).toFixed(1)}%
+                  </span>
+                )}
+              </div>
             ) : (
               <span className="text-[11px] font-semibold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full">
                 Open Position
@@ -760,17 +767,23 @@ export const UserDashboard: React.FC = () => {
         </div>
 
         {/* PRICE & DATE DETAILS */}
-        <div className="flex items-center justify-between text-xs text-gray-400 pt-1 border-t border-[#1e2030]/50 font-mono">
+        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 text-xs text-gray-400 pt-1 border-t border-[#1e2030]/50 font-mono">
           <div>
             <span className="text-[10px] text-gray-500 block">ENTRY</span>
             <span className="text-gray-200">${trade.entryPrice?.toLocaleString('en-US')}</span>
           </div>
-          <div className="text-right">
+          <div>
             <span className="text-[10px] text-gray-500 block">EXIT</span>
             <span className="text-gray-200">{trade.exitPrice ? `$${trade.exitPrice.toLocaleString('en-US')}` : '—'}</span>
           </div>
-          <div className="text-right">
-            <span className="text-[10px] text-gray-500 block">TIME / DATE</span>
+          {trade.margin && (
+            <div>
+              <span className="text-[10px] text-gray-500 block">MARGIN</span>
+              <span className="text-gray-200">${trade.margin?.toLocaleString('en-US')}</span>
+            </div>
+          )}
+          <div className="text-right col-span-1">
+            <span className="text-[10px] text-gray-500 block">DATE</span>
             <span className="text-gray-300 text-[11px] block">
               {new Date(trade.createdAt).toLocaleDateString('en-US', {
                 month: 'short',

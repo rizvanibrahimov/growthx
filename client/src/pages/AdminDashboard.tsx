@@ -181,7 +181,7 @@ export const AdminDashboard: React.FC = () => {
         userId: selectedUser.id,
         asset: tradeForm.asset,
         direction: tradeForm.direction,
-        leverage: tradeForm.leverage,
+        leverage: parseInt(tradeForm.leverage.replace(/[^0-9]/g, ''), 10) || 1,
         entryPrice: entry,
         quantity: qty,
         notes: tradeForm.notes,

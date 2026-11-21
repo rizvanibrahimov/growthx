@@ -170,15 +170,18 @@ router.post('/trades', async (req: Request, res: Response) => {
       return;
     }
 
+    // Parse leverage: strip non-numeric chars (e.g. "20x" -> 20), default to 1
+    const parsedLeverage = typeof leverage === 'string' ? parseInt(leverage.replace(/[^0-9]/g, ''), 10) : (typeof leverage === 'number' ? leverage : 1);
+
     const trade = await prisma.trade.create({
       data: {
         userId,
         createdById: req.user!.id,
         asset,
         direction,
-        leverage: leverage || null,
-        entryPrice,
-        quantity,
+        leverage: isNaN(parsedLeverage) ? 1 : parsedLeverage,
+        entryPrice: typeof entryPrice === 'string' ? parseFloat(entryPrice) : entryPrice,
+        quantity: typeof quantity === 'string' ? parseFloat(quantity) : quantity,
         notes: notes || null,
         status: 'OPEN',
         openedAt: new Date(),
